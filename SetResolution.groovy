@@ -35,7 +35,7 @@ mylogger.info("----------------STARTED------------------------------------------
 
 
 def issueManager = ComponentAccessor.getIssueManager()
-//MutableIssue myIssue = issueManager.getIssueObject("JIRA-1")
+MutableIssue myIssue = issueManager.getIssueObject("TESDATERES-1")
 
 
 Date CurrentDate=new Date()
@@ -53,8 +53,8 @@ mylogger.debug( "New datestamp: $PastDate   ")
 
 
 //Timestamp time = new Timestamp(119,7,5,13,41,0,0)
-//myIssue.setResolutionDate(time)
-//myIssue.store()
+myIssue.setResolutionDate(PastDate)
+myIssue.store()
 
 
 mylogger.info("----------------ENDED--------------------------------------------------------------------")
