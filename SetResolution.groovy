@@ -1,4 +1,9 @@
-// Set fixed issue's Resolutiondate to fixed date stamp
+// Set issue's Resolutiondate to fixed date stamp, based on history when issue originally was solved
+// Used to force set some issues which Resolved Date is missing due some bulk changes to issue
+// Detection logic needs changes if issue has been resolved several times, scoped out in this script
+// JQL search part from Adaptavista library
+//
+// mika.nokka1@gmail.com 22.6.2021 
 
 
 
@@ -30,16 +35,16 @@ import com.atlassian.jira.issue.search.SearchException
 // CONFIGURATIONS *********************
 
 int MonthsValue = 20 as Integer 
+final String targetState="Settled" //Done
+final String testissue="NB1394NCM-283"
 
 // END OF CONFIGURATIONS ****************
-
 
 
 // set logging to Jira log
 def Logger mylogger
 mylogger = Logger.getLogger("ResolutioDater")
 mylogger.setLevel(Level.DEBUG ) // or INFO (prod) or DEBUG (development)
-
 mylogger.info("----------------STARTED--------------------------------------------------------------------")
 
 
@@ -47,14 +52,11 @@ def issueService = ComponentAccessor.issueService
 def issueManager = ComponentAccessor.getIssueManager()
 //IssueIndexingService issueIndexingService = ComponentAccessor.getComponent(IssueIndexingService)
 def changeHistoryManager = ComponentAccessor.getChangeHistoryManager()
-
-//MutableIssue myIssue = issueManager.getIssueObject("TESDATERES-1")
-//MutableIssue myIssue = issueManager.getIssueObject("NB1394NCM-1")
-Issue  myIssue = issueManager.getIssueObject("NB1394NCM-283")
-//Issue  myIssue = issueManager.getIssueObject("TESDATERES-1")
-MutableIssue mutantIssue=issueManager.getIssueObject(myIssue.id)
-
 def currentUser = ComponentAccessor.jiraAuthenticationContext.loggedInUser
+
+
+// TEST LOGIC BEFORE BULK DRIVE
+Issue  myIssue = issueManager.getIssueObject(testissue)
 
 Date CurrentDate=new Date()
 mylogger.debug( "CurrentDate: $CurrentDate   ")
@@ -62,59 +64,40 @@ mylogger.debug( "CurrentDate: $CurrentDate   ")
 def timepast
 Timestamp PastDate
 use(TimeCategory) {
-	timepast=CurrentDate - MonthsValue.months
+	timepast=CurrentDate - MonthsValue.months // testing if time can really be changed
 	PastDate=new Timestamp(timepast.getTime())
 }
-mylogger.debug( "New date: $timepast   ")
-mylogger.debug( "New datestamp: $PastDate   ")
-
+mylogger.debug( "Test New date: $timepast   ")
+mylogger.debug( "Test New datestamp: $PastDate   ")
 
 // check when issuw was acttually resolved, in this case when moved to "Done" state
 def done = changeHistoryManager.getChangeItemsForField(myIssue, "status").reverse().find {
 	it.toString == "Settled"  // Settled Done
 	}?.getCreated()
+	
 def doneTime = done?.getTime()
 def doneDate
 doneDate = new Date((long)doneTime)
-
 def doneStamp
 def timedone
 use(TimeCategory) {
 	timedone=doneDate
 	doneStamp=new Timestamp(timedone.getTime())
 }
-
-mylogger.debug( "doneTime: $doneTime   ")
-mylogger.debug( "doneDate: $doneDate   ")
-mylogger.debug( "orig settleddoneStamp: $doneStamp   ")
-
+mylogger.debug( "Test doneTime: $doneTime   ")
+mylogger.debug( "Test doneDate: $doneDate   ")
+mylogger.debug( "Test orig settleddoneStamp: $doneStamp   ")
 currentresdate=myIssue.getResolutionDate() 
-mylogger.debug( "currentresdate: $currentresdate   ")
+mylogger.debug( "Test currentresdate: $currentresdate   ")
+// return 
+// END OF TEST LOGIC
 
 
 
-myIssue.setResolutionDate(doneStamp)
 
-
-//def issueInputParams = issueService.newIssueInputParameters()
-//issueInputParams.setResolutionDate(PastDate.toString())
-//issueManager.updateIssue(currentUser, myIssue, EventDispatchOption.ISSUE_UPDATED, false)
-// Update the search index for the newly created child issue.
-//def wasIndexing = ImportUtils.isIndexIssues()
-//ImportUtils.setIndexIssues(true)
-//issueIndexingService.reIndex(mutantIssue)
-//ImportUtils.setIndexIssues(wasIndexing)
-
-
-myIssue.store() //works but usage not recommended anymore, the modern approach commented out does not work yet
-
-//def updateValidationResult = issueService.validateUpdate(currentUser, myIssue.id, issueInputParams)
-//assert updateValidationResult.valid : updateValidationResult.errorCollection
-//def updateResult = issueService.update(currentUser, updateValidationResult, EventDispatchOption.ISSUE_UPDATED, false)
-//assert updateResult.valid : updateResult.errorCollection
-
-
-
+// Actual operations
+// 1) Do JQL query for wished issues (with missing Resolved info)
+// 2) Go through all issues, find when issue was origivally solved, force set Resolved Date
 
 // from adaptavista library
 final jqlSearch = "status = Settled AND resolved is EMPTY ORDER BY resolved ASC"
@@ -135,12 +118,13 @@ try {
 	def results = searchService.search(currentUser, parseResult.query, PagerFilter.unlimitedFilter)
 	def issues = results.results
 	issues.each {
-		mylogger.info("Issue: $it.key")
+		mylogger.info("Count:$counter Issue: $it.key")
 		counter=counter+1
+		FindAndSetResolutionDate(it.key,currentUser,targetState,mylogger,issueManager,changeHistoryManager)
 	}
 
 	mylogger.info("Number of issues found: $counter")
-	//issues*.key
+	//issues*.key // ??
 } catch (SearchException e) {
 	e.printStackTrace()
 	null
@@ -148,6 +132,42 @@ try {
 
 
 
+
+// check original revoslde date fron history and force set
+def FindAndSetResolutionDate(String issuekey,currentUser,String targetState,mylogger,issueManager,changeHistoryManager) {
+	
+
+	Issue myIssue =issueManager.getIssueObject(issuekey)
+
+		
+	// check when issuw was acttually resolved, in this case when moved to for example "Done" state
+	def done = changeHistoryManager.getChangeItemsForField(myIssue, "status").reverse().find {
+		it.toString == "Settled"  // Settled Done
+		}?.getCreated()
+	def doneTime = done?.getTime()
+	def doneDate
+	doneDate = new Date((long)doneTime)
+	
+	def doneStamp
+	def timedone
+	use(TimeCategory) {
+		timedone=doneDate
+		doneStamp=new Timestamp(timedone.getTime())
+	}
+	
+	mylogger.debug( "Entered issus state ($targetState): $doneTime   ")
+	mylogger.debug( "Entered issus state ($targetState) date: $doneDate   ")
+	mylogger.debug( "Entered issus state ($targetState) stamp: $doneStamp   ")
+	
+	currentresdate=myIssue.getResolutionDate()
+	mylogger.debug( "Current getResolutionDate: $currentresdate   ")
+	
+	// Activate for changes to be done
+	//myIssue.setResolutionDate(doneStamp)
+	//myIssue.store() // WARNING: works but usage not recommended anymore, the modern approach commented out does not work yet
+	mylogger.debug( "Done ResolotionDate setting for: $issuekey  -> $doneStamp")
+	mylogger.info("--------------------------------------------------------------------------------")
+}
 
 
 
