@@ -7,3 +7,4 @@ to be applied as a bulk operation
 
 Check the code, you need to activate yourself yhe old issue.store() API usage
 
+Doing full Jira reindex after script usage will calculate Resolution Date and Resolution again
