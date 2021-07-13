@@ -31,12 +31,13 @@ import com.atlassian.jira.issue.security.IssueSecuritySchemeManager
 import com.atlassian.jira.web.bean.PagerFilter
 import com.atlassian.jira.bc.issue.search.SearchService
 import com.atlassian.jira.issue.search.SearchException
+import com.atlassian.jira.issue.resolution.Resolution
 
 // CONFIGURATIONS *********************
 
 int MonthsValue = 20 as Integer 
 final String targetState="Settled" //Done
-final String testissue="NB1394NCM-283"
+final String testissue="NB1394NCM-334"
 
 // END OF CONFIGURATIONS ****************
 
@@ -89,7 +90,9 @@ mylogger.debug( "Test doneDate: $doneDate   ")
 mylogger.debug( "Test orig settleddoneStamp: $doneStamp   ")
 currentresdate=myIssue.getResolutionDate() 
 mylogger.debug( "Test currentresdate: $currentresdate   ")
-// return 
+
+FindAndSetResolutionDate(testissue,currentUser,targetState,mylogger,issueManager,changeHistoryManager)
+return 
 // END OF TEST LOGIC
 
 
@@ -100,7 +103,7 @@ mylogger.debug( "Test currentresdate: $currentresdate   ")
 // 2) Go through all issues, find when issue was origivally solved, force set Resolved Date
 
 // from adaptavista library
-final jqlSearch = "status = Settled AND resolved is EMPTY ORDER BY resolved ASC"
+final jqlSearch = "(Project = \"NB1395 Noteworthy Claim Management\" ) AND (status = Settled) AND (resolved is EMPTY) ORDER BY resolved ASC"
 def searchService = ComponentAccessor.getComponentOfType(SearchService)
 
 // Parse the query
@@ -163,8 +166,11 @@ def FindAndSetResolutionDate(String issuekey,currentUser,String targetState,mylo
 	mylogger.debug( "Current getResolutionDate: $currentresdate   ")
 	
 	// Activate for changes to be done
-	//myIssue.setResolutionDate(doneStamp)
-	//myIssue.store() // WARNING: works but usage not recommended anymore, the modern approach commented out does not work yet
+	myIssue.setResolutionDate(doneStamp)
+	myIssue.setResolved(doneStamp)  // REMOBRE ME
+	//
+	myIssue.setResolution("Done")
+	myIssue.store() // WARNING: works but usage not recommended anymore, the modern approach commented out does not work yet
 	mylogger.debug( "Done ResolotionDate setting for: $issuekey  -> $doneStamp")
 	mylogger.info("--------------------------------------------------------------------------------")
 }
